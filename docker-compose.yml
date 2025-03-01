@@ -1,0 +1,25 @@
+services:
+  cuprate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cuprate:latest
+    container_name: cuprate-node
+    restart: unless-stopped
+    ports:
+      # P2P ports (mainnet, testnet, stagenet)
+      - "18080:18080"
+      - "28080:28080"
+      - "38080:38080"
+      # RPC ports (mainnet, testnet, stagenet)
+      - "18081:18081"
+      - "28081:28081"
+      - "38081:38081"
+    volumes:
+      - cuprate-data:/home/cuprate/.local/share/cuprate
+      - cuprate-config:/home/cuprate/.config/cuprate
+    command: ["--network", "mainnet"]
+
+volumes:
+  cuprate-data:
+  cuprate-config:
