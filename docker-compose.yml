@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: cuprate:latest
+    image: ghcr.io/hundehausen/cuprate-docker:latest
     container_name: cuprate-node
     restart: unless-stopped
     ports:
