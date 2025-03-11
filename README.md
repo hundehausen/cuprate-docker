@@ -4,7 +4,13 @@ This repository contains Docker configuration for running [Cuprate](https://gith
 
 Cuprate is not ready for production use.
 
+## Know issues
+
+- cuprated is buggy if STDIN pipe is not available -> Spams logs [Issue](https://github.com/Cuprate/cuprate/issues/396)
+
 ## Quick Start
+
+### With Docker Compose
 
 1. Clone this repository:
    ```bash
@@ -22,6 +28,24 @@ Cuprate is not ready for production use.
    docker compose logs -f
    ```
 
+### With Docker run
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/hundehausen/cuprate-docker.git
+   cd cuprate-docker
+   ```
+
+2. Start the Cuprate node:
+   ```bash
+   docker run -d --name cuprate-node -v cuprate-data:/home/cuprate/.local/share/cuprate -v ./config:/home/cuprate/.config/cuprate -p 18080:18080 -p 18081:18081 ghcr.io/hundehausen/cuprate-docker:latest
+   ```
+
+3. Check the logs:
+   ```bash
+   docker logs -f cuprate-node
+   ```
+
 ## Configuration
 
 ### Network Selection
@@ -34,9 +58,10 @@ command: ["--network", "testnet"]  # or "stagenet"
 
 ### Data Persistence
 
-Blockchain data and configuration are stored in Docker volumes:
+Blockchain data is stored in Docker volume:
 - `cuprate-data`: Contains the blockchain data
-- `cuprate-config`: Contains configuration files
+Config data is the directory mounted at `./config`:
+- `./config`: Contains configuration files
 
 ## Ports
 
