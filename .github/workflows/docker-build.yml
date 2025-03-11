@@ -8,13 +8,55 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:  # Allow manual triggering
+  schedule:
+    - cron: '0 */4 * * *'  # Run every 4 hours
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  CUPRATE_REPO: Cuprate/cuprate
 
 jobs:
+  check-for-updates:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      cuprate_commit: ${{ steps.check.outputs.cuprate_commit }}
+    steps:
+      - name: Check for new commits or tags in Cuprate
+        id: check
+        run: |
+          # Get the latest commit hash from Cuprate repository
+          LATEST_COMMIT=$(curl -s "https://api.github.com/repos/${{ env.CUPRATE_REPO }}/commits/main" | jq -r '.sha' | cut -c1-7)
+          
+          # Get the latest release tag from Cuprate repository
+          LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ env.CUPRATE_REPO }}/tags" | jq -r '.[0].name // ""')
+          
+          # Get the last built commit hash (if exists)
+          LAST_BUILT_COMMIT=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs?status=success&per_page=1" | \
+            jq -r '.workflow_runs[0].head_sha // ""')
+          
+          echo "Latest Cuprate commit: $LATEST_COMMIT"
+          echo "Latest Cuprate tag: $LATEST_TAG"
+          echo "Last built commit: $LAST_BUILT_COMMIT"
+          
+          # Determine if we should build
+          if [[ -n "$LATEST_TAG" && "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "Found semantic version tag: $LATEST_TAG"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "cuprate_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          elif [[ "$LATEST_COMMIT" != "$LAST_BUILT_COMMIT" ]]; then
+            echo "Found new commit: $LATEST_COMMIT"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "cuprate_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          else
+            echo "No new commits or tags found"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
   build-and-push:
+    needs: check-for-updates
+    if: ${{ github.event_name != 'schedule' || needs.check-for-updates.outputs.should_build == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -52,10 +94,16 @@ jobs:
       - name: Get Cuprate commit hash
         id: cuprate-commit
         run: |
-          # Clone Cuprate repository temporarily to get latest commit hash
-          git clone --depth 1 https://github.com/Cuprate/cuprate.git /tmp/cuprate
-          cd /tmp/cuprate
-          CUPRATE_COMMIT=$(git rev-parse --short HEAD)
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            # Use the commit hash from the check-for-updates job
+            CUPRATE_COMMIT="${{ needs.check-for-updates.outputs.cuprate_commit }}"
+          else
+            # Clone Cuprate repository temporarily to get latest commit hash
+            git clone --depth 1 https://github.com/Cuprate/cuprate.git /tmp/cuprate
+            cd /tmp/cuprate
+            CUPRATE_COMMIT=$(git rev-parse --short HEAD)
+          fi
+          
           echo "CUPRATE_COMMIT=$CUPRATE_COMMIT" >> $GITHUB_ENV
           echo "cuprate_commit=$CUPRATE_COMMIT" >> $GITHUB_OUTPUT
 
