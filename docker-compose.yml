@@ -3,6 +3,8 @@ services:
     image: ghcr.io/hundehausen/cuprate-docker:latest
     container_name: cuprate-node
     restart: unless-stopped
+    tty: true
+    stdin_open: true
     ports:
       # P2P ports (mainnet, testnet, stagenet)
       - "18080:18080"
