@@ -134,6 +134,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            CACHEBUST=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
 
   security-scan:
     needs: build-and-push

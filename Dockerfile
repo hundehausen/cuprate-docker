@@ -10,9 +10,14 @@ RUN apt-get update && apt-get install -y \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone the Cuprate repository
+# Clone the Cuprate repository with no caching
 WORKDIR /usr/src
-RUN git clone https://github.com/Cuprate/cuprate.git
+# This ARG is used to bust the Docker build cache for the following RUN command
+# Set to an always unique value during build with:
+# docker build --build-arg CACHEBUST=$(date +%s) -t cuprate-docker .
+ARG CACHEBUST=1
+# The echo forces this layer to be rebuilt even when using cached layers
+RUN echo "Cache bust: ${CACHEBUST}" && git clone https://github.com/Cuprate/cuprate.git
 WORKDIR /usr/src/cuprate
 
 # Build the project
