@@ -4,9 +4,10 @@ This repository contains Docker configuration for running [Cuprate](https://gith
 
 Cuprate is not ready for production use.
 
-## Know issues
+## Known issues
 
 - cuprated is buggy if STDIN pipe is not available -> Spams logs [Issue](https://github.com/Cuprate/cuprate/issues/396)
+  - Note that this is fixed if you run the Docker Compose in this repo.
 
 ## Quick Start
 
