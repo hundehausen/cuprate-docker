@@ -175,7 +175,7 @@ jobs:
           docker pull ${{ steps.image-name.outputs.FULL_IMAGE_NAME }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           image-ref: ${{ steps.image-name.outputs.FULL_IMAGE_NAME }}
           format: 'sarif'
@@ -183,14 +183,14 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
           category: 'Trivy Container Scan'
 
       # Also output a human-readable version to the workflow logs
       - name: Run Trivy scan for workflow logs
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           image-ref: ${{ steps.image-name.outputs.FULL_IMAGE_NAME }}
           format: 'table'
