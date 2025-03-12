@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Update GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Specify reviewers for pull requests
+    reviewers:
+      - "hundehausen"
+    # Increase pull request limit to reduce noise
+    open-pull-requests-limit: 10
+    # Auto-merge minor and patch updates
+    # GitHub can only auto-merge if you have branch protection rules set up
+    # or if you enable auto-merge in repo settings
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Update Docker images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Specify reviewers for pull requests
+    reviewers:
+      - "hundehausen"
+    # Increase pull request limit to reduce noise
+    open-pull-requests-limit: 10
+    # Auto-merge minor and patch updates
+    groups:
+      docker:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
