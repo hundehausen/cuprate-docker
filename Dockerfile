@@ -12,12 +12,17 @@ RUN apt-get update && apt-get install -y \
 
 # Clone the Cuprate repository with no caching
 WORKDIR /usr/src
+# Set cuprate branch or release to use and pin to a given commit
+ARG CUPRATE_BRANCH=cuprated-0.0.1
+ARG CUPRATE_COMMIT=21ad35d44a465efbb5414a902cb6c370b8358303
 # This ARG is used to bust the Docker build cache for the following RUN command
 # Set to an always unique value during build with:
 # docker build --build-arg CACHEBUST=$(date +%s) -t cuprate-docker .
 ARG CACHEBUST=1
 # The echo forces this layer to be rebuilt even when using cached layers
-RUN echo "Cache bust: ${CACHEBUST}" && git clone https://github.com/Cuprate/cuprate.git
+RUN echo "Cache bust: ${CACHEBUST}" \
+    && git clone --branch ${CUPRATE_BRANCH} https://github.com/Cuprate/cuprate.git \
+    && test `git rev-parse HEAD` = ${CUPRATE_COMMIT} || exit 1 \
 WORKDIR /usr/src/cuprate
 
 # Build the project
