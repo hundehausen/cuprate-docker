@@ -1,180 +1,99 @@
-name: Build and Push Docker Image
+name: Check Cuprate Latest Tag and Build Docker
 
 on:
-  push:
-    branches: [main]
-    tags:
-      - 'cuprated-*.*.*'  # Will trigger on cuprated tags (cuprated-0.0.1, cuprated-0.0.2, etc.)
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:  # Allow manual triggering
   schedule:
-    - cron: '0 */4 * * *'  # Run every 4 hours
-
-# Concurrency configuration to cancel in-progress jobs when new commits are pushed
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  CUPRATE_REPO: Cuprate/cuprate
+    # Run every 4 hours
+    - cron: '0 */4 * * *'
+  # Allow manual trigger
+  workflow_dispatch:
+  # Run on push to main branch
+  push:
+    branches:
+      - main
 
 jobs:
-  check-for-updates:
+  check-and-build:
     runs-on: ubuntu-latest
-    outputs:
-      should_build: ${{ steps.check.outputs.should_build }}
-      cuprate_tag: ${{ steps.check.outputs.cuprate_tag }}
-    steps:
-      - name: Check for new tags in Cuprate
-        id: check
-        run: |
-          # Get the latest release tag from Cuprate repository
-          LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ env.CUPRATE_REPO }}/tags" | jq -r '.[0].name // ""')
-          
-          # Get the last built tag (if exists)
-          LAST_BUILT_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs?status=success&per_page=1" | \
-            jq -r '.workflow_runs[0].head_branch // ""')
-          
-          echo "Latest Cuprate tag: $LATEST_TAG"
-          echo "Last built tag: $LAST_BUILT_TAG"
-          
-          # Determine if we should build
-          if [[ -n "$LATEST_TAG" && "$LATEST_TAG" =~ ^cuprated-[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "Found cuprated tag: $LATEST_TAG"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "cuprate_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          else
-            echo "No new cuprated tags found"
-            echo "should_build=false" >> $GITHUB_OUTPUT
-          fi
-
-  build-and-push:
-    needs: check-for-updates
-    if: ${{ github.event_name != 'schedule' || needs.check-for-updates.outputs.should_build == 'true' }}
-    runs-on: ubuntu-latest
-    outputs:
-      cuprate_tag: ${{ steps.docker-tags.outputs.cuprate_tag }}
     permissions:
       contents: read
       packages: write
-
+      security-events: write # Required for GitHub CodeQL and dependency submission
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for tags
 
+      - name: Get latest Cuprate tag
+        id: get-latest-tag
+        run: |
+          # Fetch the latest tag from Cuprate repository that matches the pattern
+          LATEST_TAG=$(curl -s https://api.github.com/repos/cuprate/cuprate/tags | jq -r '[.[] | select(.name | startswith("cuprated-"))] | .[0].name')
+          echo "Latest Cuprate tag: $LATEST_TAG"
+          # Extract version number from tag (e.g., cuprated-0.0.1 -> 0.0.1)
+          VERSION=${LATEST_TAG#cuprated-}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "cuprate_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      # Set up QEMU for multi-architecture builds
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: 'arm64,amd64'
 
+      # Set up Docker Buildx for multi-platform builds
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v3
         with:
+          version: latest
           platforms: linux/amd64,linux/arm64
 
-      - name: Log in to the Container registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      # Create and start build cache
+      - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ghcr.io/${{ github.repository_owner }}/cuprate
           tags: |
             type=raw,value=latest
-            type=ref,event=pr
-
-      - name: Determine Docker tags
-        id: docker-tags
-        run: |
-          # Set the CUPRATE_TAG variable
-          if [[ "${{ github.event_name }}" == "schedule" && -n "${{ needs.check-for-updates.outputs.cuprate_tag }}" ]]; then
-            CUPRATE_TAG="${{ needs.check-for-updates.outputs.cuprate_tag }}"
-          elif [[ "${{ github.ref }}" == refs/tags/cuprated-* ]]; then
-            CUPRATE_TAG="${{ github.ref_name }}"
-          else
-            CUPRATE_TAG="cuprated-0.0.1"
-          fi
+            type=raw,value=${{ steps.get-latest-tag.outputs.version }}
           
-          echo "cuprate_tag=$CUPRATE_TAG" >> $GITHUB_OUTPUT
-          echo "CUPRATE_TAG=$CUPRATE_TAG" >> $GITHUB_ENV
-          
-          # Log the tags we'll be using
-          echo "Using tags: latest and $CUPRATE_TAG"
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}:latest
-            ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.docker-tags.outputs.cuprate_tag }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           build-args: |
-            CACHEBUST=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
-            CUPRATE_TAG=${{ env.CUPRATE_TAG }}
-
-  security-scan:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'pull_request' }}
-    permissions:
-      contents: read
-      packages: read
-      security-events: write # Needed to upload sarif results
-
-    steps:
-      - name: Set image name for scanning
-        id: image-name
-        run: |
-          # Use both latest and cuprate version tags for scanning
-          REGISTRY="${{ env.REGISTRY }}"
-          REPO="${{ github.repository }}"
-          CUPRATE_TAG="${{ needs.build-and-push.outputs.cuprate_tag }}"
+            CUPRATE_TAG=${{ steps.get-latest-tag.outputs.cuprate_tag }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate:buildcache,mode=max
+          # Enable parallel builds
+          builder: ${{ steps.buildx.outputs.name }}
+          provenance: false
+          outputs: type=registry,push=true
           
-          echo "FULL_IMAGE_NAME_LATEST=$REGISTRY/$REPO:latest" >> $GITHUB_OUTPUT
-          echo "FULL_IMAGE_NAME_VERSION=$REGISTRY/$REPO:$CUPRATE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull Docker image for scanning
-        run: |
-          docker pull ${{ steps.image-name.outputs.FULL_IMAGE_NAME_LATEST }}
-
+      # Security Scanning with Trivy
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
-          image-ref: ${{ steps.image-name.outputs.FULL_IMAGE_NAME_LATEST }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/cuprate:${{ steps.get-latest-tag.outputs.version }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-
+          
+      # Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
-          category: 'Trivy Container Scan'
-
-      # Also output a human-readable version to the workflow logs
-      - name: Run Trivy scan for workflow logs
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: ${{ steps.image-name.outputs.FULL_IMAGE_NAME_LATEST }}
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          category: 'trivy'
