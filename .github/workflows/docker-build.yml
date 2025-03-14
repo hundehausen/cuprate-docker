@@ -2,11 +2,11 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
     tags:
-      - 'v*.*.*'  # Will trigger on semantic version tags (v1.0.0, v2.1.3, etc.)
+      - 'cuprated-*.*.*'  # Will trigger on cuprated tags (cuprated-0.0.1, cuprated-0.0.2, etc.)
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:  # Allow manual triggering
   schedule:
     - cron: '0 */4 * * *'  # Run every 4 hours
@@ -26,36 +26,28 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
-      cuprate_commit: ${{ steps.check.outputs.cuprate_commit }}
+      cuprate_tag: ${{ steps.check.outputs.cuprate_tag }}
     steps:
-      - name: Check for new commits or tags in Cuprate
+      - name: Check for new tags in Cuprate
         id: check
         run: |
-          # Get the latest commit hash from Cuprate repository
-          LATEST_COMMIT=$(curl -s "https://api.github.com/repos/${{ env.CUPRATE_REPO }}/commits/main" | jq -r '.sha' | cut -c1-7)
-          
           # Get the latest release tag from Cuprate repository
           LATEST_TAG=$(curl -s "https://api.github.com/repos/${{ env.CUPRATE_REPO }}/tags" | jq -r '.[0].name // ""')
           
-          # Get the last built commit hash (if exists)
-          LAST_BUILT_COMMIT=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs?status=success&per_page=1" | \
-            jq -r '.workflow_runs[0].head_sha // ""')
+          # Get the last built tag (if exists)
+          LAST_BUILT_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-build.yml/runs?status=success&per_page=1" | \
+            jq -r '.workflow_runs[0].head_branch // ""')
           
-          echo "Latest Cuprate commit: $LATEST_COMMIT"
           echo "Latest Cuprate tag: $LATEST_TAG"
-          echo "Last built commit: $LAST_BUILT_COMMIT"
+          echo "Last built tag: $LAST_BUILT_TAG"
           
           # Determine if we should build
-          if [[ -n "$LATEST_TAG" && "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "Found semantic version tag: $LATEST_TAG"
+          if [[ -n "$LATEST_TAG" && "$LATEST_TAG" =~ ^cuprated-[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "Found cuprated tag: $LATEST_TAG"
             echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "cuprate_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
-          elif [[ "$LATEST_COMMIT" != "$LAST_BUILT_COMMIT" ]]; then
-            echo "Found new commit: $LATEST_COMMIT"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "cuprate_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+            echo "cuprate_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
           else
-            echo "No new commits or tags found"
+            echo "No new cuprated tags found"
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
@@ -94,39 +86,22 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value={{tag}},prefix=,suffix=,enable=${{ startsWith(github.ref, 'refs/tags/cuprated-') }}
             type=ref,event=pr
-            type=sha,format=short
-
-      - name: Get Cuprate commit hash
-        id: cuprate-commit
-        run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # Use the commit hash from the check-for-updates job
-            CUPRATE_COMMIT="${{ needs.check-for-updates.outputs.cuprate_commit }}"
-          else
-            # Clone Cuprate repository temporarily to get latest commit hash
-            git clone --depth 1 https://github.com/Cuprate/cuprate.git /tmp/cuprate
-            cd /tmp/cuprate
-            CUPRATE_COMMIT=$(git rev-parse --short HEAD)
-          fi
-          
-          echo "CUPRATE_COMMIT=$CUPRATE_COMMIT" >> $GITHUB_ENV
-          echo "cuprate_commit=$CUPRATE_COMMIT" >> $GITHUB_OUTPUT
 
       - name: Determine Docker tags
         id: docker-tags
         run: |
-          # If this is a semantic version tag, use that
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "Using semantic version tag: ${{ steps.meta.outputs.tags }}"
+          # If this is a cuprated tag, use that
+          if [[ "${{ github.ref }}" == refs/tags/cuprated-* ]]; then
+            # Extract version from the tag (e.g., cuprated-0.0.1 -> 0.0.1)
+            VERSION=${GITHUB_REF#refs/tags/cuprated-}
+            echo "Using cuprated version tag: $VERSION"
           else
-            # Otherwise use latest + short commit hash of cuprate
-            echo "Using Cuprate commit hash: ${{ steps.cuprate-commit.outputs.cuprate_commit }}"
-            echo "ADDITIONAL_TAGS=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.cuprate-commit.outputs.cuprate_commit }}" >> $GITHUB_ENV
+            # For non-tag builds, just use latest
+            echo "Using latest tag"
+            echo "ADDITIONAL_TAGS=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_ENV
           fi
 
       - name: Build and push Docker image
@@ -141,6 +116,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             CACHEBUST=${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
+            CUPRATE_TAG=${{ github.event_name == 'schedule' && needs.check-for-updates.outputs.cuprate_tag || startsWith(github.ref, 'refs/tags/cuprated-') && github.ref_name || 'cuprated-0.0.1' }}
 
   security-scan:
     needs: build-and-push
@@ -155,9 +131,9 @@ jobs:
       - name: Set image name for scanning
         id: image-name
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Use the semantic tag
-            VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "${{ github.ref }}" == refs/tags/cuprated-* ]]; then
+            # Extract version from the tag (e.g., cuprated-0.0.1 -> 0.0.1)
+            VERSION=${GITHUB_REF#refs/tags/cuprated-}
             IMAGE_TAG=$VERSION
           else
             # Use latest tag for non-tag builds
