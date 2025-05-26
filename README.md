@@ -72,8 +72,3 @@ The following ports are exposed:
   - Mainnet: 18080
   - Testnet: 28080
   - Stagenet: 38080
-
-- **RPC Ports**:
-  - Mainnet: 18081
-  - Testnet: 28081
-  - Stagenet: 38081

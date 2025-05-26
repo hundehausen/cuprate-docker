@@ -6,14 +6,10 @@ services:
     tty: true
     stdin_open: true
     ports:
-      # P2P ports (mainnet, testnet, stagenet)
-      - "18080:18080"
-      - "28080:28080"
-      - "38080:38080"
-      # RPC ports (mainnet, testnet, stagenet)
-      - "18081:18081"
-      - "28081:28081"
-      - "38081:38081"
+      # P2P ports
+      - "18080:18080" # mainnet
+      # - "28080:28080" # testnet
+      # - "38080:38080" # stagenet
     volumes:
       - cuprate-data:/home/cuprate/.local/share/cuprate
       - ./config:/home/cuprate/.config/cuprate

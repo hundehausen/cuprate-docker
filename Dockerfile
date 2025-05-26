@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Define ARG for Cuprate tag
-ARG CUPRATE_TAG=cuprated-0.0.1
+ARG CUPRATE_TAG=cuprated-0.0.3
 
 # Clone the Cuprate repository with no caching
 WORKDIR /usr/src
@@ -35,11 +35,16 @@ RUN cargo build --release --bin cuprated
 # Runtime stage
 FROM debian:bookworm-slim
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libssl-dev \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies and upgrade zlib1g to address CVE-2023-45853
+RUN apt-get update && \
+    apt-get install -y libssl-dev ca-certificates && \
+    # Add bookworm-security repository for security updates
+    echo 'deb http://security.debian.org/debian-security bookworm-security main' > /etc/apt/sources.list.d/security.list && \
+    apt-get update && \
+    # Explicitly upgrade zlib1g to latest version
+    apt-get install -y --only-upgrade zlib1g && \
+    # Clean up
+    rm -rf /var/lib/apt/lists/*
 
 # Create a cuprate user
 RUN useradd -m -u 1000 -s /bin/bash cuprate
@@ -55,11 +60,8 @@ COPY --from=builder /usr/src/cuprate/target/release/cuprated /usr/local/bin/
 USER cuprate
 WORKDIR /home/cuprate
 
-# Expose P2P and RPC ports (mainnet, testnet, stagenet)
-# P2P ports
+# Expose P2P ports (mainnet, testnet, stagenet)
 EXPOSE 18080/tcp 28080/tcp 38080/tcp
-# RPC ports
-EXPOSE 18081/tcp 28081/tcp 38081/tcp
 
 # Set up a volume for persistent data
 VOLUME ["/home/cuprate/.local/share/cuprate", "/home/cuprate/.config/cuprate"]
