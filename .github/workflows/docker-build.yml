@@ -2,8 +2,8 @@ name: Check Cuprate Latest Tag and Build Docker
 
 on:
   schedule:
-    # Run every 4 hours
-    - cron: '0 */4 * * *'
+    # Run every 8 hours
+    - cron: '0 */8 * * *'
   # Allow manual trigger
   workflow_dispatch:
   # Run on push to main branch
@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for better versioning
 
       - name: Get latest Cuprate tag
         id: get-latest-tag
@@ -64,6 +66,9 @@ jobs:
           tags: |
             type=raw,value=latest
             type=raw,value=${{ steps.get-latest-tag.outputs.version }}
+            type=sha,format=short
+            type=ref,event=branch
+            type=ref,event=tag
           
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -75,12 +80,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             CUPRATE_TAG=${{ steps.get-latest-tag.outputs.cuprate_tag }}
-          # Use local cache instead of registry cache
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Enable parallel builds
+          # Enhanced caching strategy
+          cache-from: |
+            type=gha
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache,mode=max
+          # Enable parallel builds and security features
           builder: ${{ steps.buildx.outputs.name }}
-          provenance: false
+          provenance: true
+          sbom: true
           outputs: type=registry,push=true
           
       # Security Scanning with Trivy
@@ -91,6 +101,9 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '1'
           
       # Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
@@ -98,3 +111,4 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
           category: 'trivy'
+          wait-for-processing: true
