@@ -39,7 +39,7 @@ Cuprate is not ready for production use.
 
 2. Start the Cuprate node:
    ```bash
-   docker run -d --name cuprate-node -v cuprate-data:/home/cuprate/.local/share/cuprate -v ./config:/home/cuprate/.config/cuprate -p 18080:18080 -p 18081:18081 ghcr.io/hundehausen/cuprate-docker:latest
+   docker run -d --name cuprate-node -v cuprate-data:/home/cuprate/.local/share/cuprate -v ./config:/home/cuprate/.config/cuprate -p 18080:18080 -p ghcr.io/hundehausen/cuprate-docker:latest
    ```
 
 3. Check the logs:
@@ -72,3 +72,7 @@ The following ports are exposed:
   - Mainnet: 18080
   - Testnet: 28080
   - Stagenet: 38080
+- **Restricted RPC Ports**:
+   - Mainnet: 18089
+   - Testnet: 28089
+   - Stagenet: 38089
