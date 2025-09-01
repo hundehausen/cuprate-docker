@@ -95,7 +95,7 @@ jobs:
           
       # Security Scanning with Trivy
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@0.33.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ steps.get-latest-tag.outputs.version }}
           format: 'sarif'
