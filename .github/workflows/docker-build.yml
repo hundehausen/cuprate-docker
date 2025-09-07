@@ -93,9 +93,20 @@ jobs:
           sbom: true
           outputs: type=registry,push=true
           
-      # Security Scanning with Trivy
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.0
+      # Security Scanning with Trivy - Table output for job logs
+      - name: Run Trivy vulnerability scanner (table output)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ steps.get-latest-tag.outputs.version }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          ignore-unfixed: true
+          exit-code: '1'
+          
+      # Security Scanning with Trivy - SARIF output for GitHub Security tab
+      - name: Run Trivy vulnerability scanner (SARIF output)
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ steps.get-latest-tag.outputs.version }}
           format: 'sarif'

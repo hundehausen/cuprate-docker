@@ -8,7 +8,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Define ARG for Cuprate tag
-ARG CUPRATE_TAG=cuprated-0.0.5
+ARG CUPRATE_TAG=cuprated-0.0.6
 
 # Clone the Cuprate repository with no caching
 WORKDIR /usr/src
