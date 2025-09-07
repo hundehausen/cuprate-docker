@@ -26,7 +26,7 @@ WORKDIR /usr/src/cuprate
 RUN cargo build --release --bin cuprated
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Install runtime dependencies and upgrade zlib1g to address CVE-2023-45853
 RUN apt-get update && \
