@@ -1,8 +1,5 @@
 services:
   cuprate:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: ghcr.io/hundehausen/cuprate-docker:latest
     container_name: cuprate-node
     restart: unless-stopped
@@ -13,7 +10,7 @@ services:
       - "18080:18080" # mainnet
       # - "28080:28080" # testnet
       # - "38080:38080" # stagenet
-      # unrestricted RPC ports
+      # restricted RPC ports
       - "18089:18089" # mainnet
       # - "28089:28089" # testnet
       # - "38089:38089" # stagenet
@@ -21,6 +18,21 @@ services:
       - cuprate-data:/home/cuprate/.local/share/cuprate
       - ./config:/home/cuprate/.config/cuprate
     command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:18089/get_height"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   cuprate-data:

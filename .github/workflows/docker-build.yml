@@ -10,6 +10,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.github/workflows/docker-build.yml'
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-upstream-tag:
@@ -45,7 +53,11 @@ jobs:
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ steps.get-latest-tag.outputs.version }}
         run: |
-          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+          # Always rebuild on push to main (Dockerfile/workflow changes)
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "Push event detected — forcing rebuild."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          elif docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
             echo "Image $IMAGE already exists. Skipping build."
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           else
@@ -100,7 +112,7 @@ jobs:
             type=sha,format=short
             type=ref,event=branch
             type=ref,event=tag
-          
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -111,6 +123,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             CUPRATE_TAG=${{ needs.check-upstream-tag.outputs.cuprate_tag }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ needs.check-upstream-tag.outputs.version }}
           # Enhanced caching strategy
           cache-from: |
             type=gha

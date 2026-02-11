@@ -1,0 +1,11 @@
+.git
+.github
+README.md
+config/
+docker-compose.yml
+docker-compose.override.yml
+docker-compose.override.yml.example
+*.md
+.DS_Store
+.gitignore
+.dockerignore

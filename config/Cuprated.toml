@@ -264,7 +264,7 @@ address = "0.0.0.0:18089"
 ##
 ## Type     | boolean
 ## Examples | true, false
-enable = false
+enable = true
 ## If a request is above this byte limit, it will be rejected.
 ##
 ## Setting this to `0` will disable the limit.

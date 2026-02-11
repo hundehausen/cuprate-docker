@@ -1,0 +1,28 @@
+# docker-compose.override.yml.example
+#
+# Copy this file to docker-compose.override.yml and uncomment the sections
+# you need. Docker Compose automatically merges the override file with the
+# main docker-compose.yml.
+#
+# cp docker-compose.override.yml.example docker-compose.override.yml
+
+services:
+  cuprate:
+    ## Uncomment to build the image locally instead of pulling from GHCR
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     CUPRATE_TAG: cuprated-0.0.8
+
+    ## Uncomment for testnet
+    # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--network", "testnet"]
+    # ports:
+    #   - "28080:28080"
+    #   - "28089:28089"
+
+    ## Uncomment for stagenet
+    # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--network", "stagenet"]
+    # ports:
+    #   - "38080:38080"
+    #   - "38089:38089"
