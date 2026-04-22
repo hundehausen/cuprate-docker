@@ -78,6 +78,8 @@ Key defaults:
 | `fast_sync` | `true` | Skip verification of old blocks using known hashes |
 | `rpc.restricted.enable` | `true` | Restricted (read-only) RPC on `0.0.0.0:18089` |
 | `rpc.unrestricted.enable` | `true` | Unrestricted RPC on `127.0.0.1:18081` (localhost only) |
+| `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
+| `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
 
 ### Network Selection
 
@@ -114,7 +116,7 @@ docker build -t cuprate-docker:local .
 
 # Build a specific Cuprate version
 docker build -t cuprate-docker:local \
-  --build-arg CUPRATE_TAG=cuprated-0.0.8 \
+  --build-arg CUPRATE_TAG=cuprated-0.0.9 \
   .
 
 # Build latest development version

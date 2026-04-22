@@ -27,6 +27,16 @@ network = "Mainnet"
 ## Type         | boolean
 ## Valid values | true, false
 fast_sync = true
+## The target maximum amount of memory to use in bytes.
+##
+## This is not a hard limit, but Cuprate will attempt to stay under this value.
+## You probably do not need to change this unless Cuprate can't read the amount of RAM your
+## system has.
+##
+## Type         | Number
+## Valid values | > 0
+## Examples     | 500_000_000, 1_000_000_000,
+target_max_memory = "Default"
 
 ## Configuration for cuprated's stdout logging system.
 [tracing.stdout]
@@ -69,7 +79,7 @@ max_log_files = 7
 ## Type         | Number
 ## Valid values | >= 1
 ## Examples     | 1, 8, 14
-#threads = 8
+#threads = 6
 
 ## Configuration for cuprated's thread-pool system, rayon.
 ##
@@ -82,6 +92,15 @@ max_log_files = 7
 
 ## The clear-net P2P config.
 [p2p.clear_net]
+## Enable IPv4 inbound server.
+##
+## The inbound server will listen on port `p2p.clear_net.p2p_port`.
+## Setting this to `false` will disable incoming IPv4 P2P connections.
+##
+## Type         | boolean
+## Valid values | false, true
+## Examples     | false
+enable_inbound = true
 ## The IPv4 address to bind and listen for connections on.
 ##
 ## Type     | IPv4 address
@@ -89,6 +108,7 @@ max_log_files = 7
 listen_on = "0.0.0.0"
 ## Enable IPv6 inbound server.
 ##
+## The inbound server will listen on port `p2p.clear_net.p2p_port`.
 ## Setting this to `false` will disable incoming IPv6 P2P connections.
 ##
 ## Type         | boolean
@@ -100,6 +120,19 @@ enable_inbound_v6 = false
 ## Type     | IPv6 address
 ## Examples | "::", "2001:0db8:85a3:0000:0000:8a2e:0370:7334"
 listen_on_v6 = "::"
+## The proxy to use for outgoing P2P connections
+##
+## This setting can only take "Tor" at the moment.
+## This will anonymise clearnet connections through Tor.
+##
+## Setting this to "" (an empty string) will disable the proxy.
+##
+## Enabling this setting will disable inbound connections.
+##
+## Type         | String
+## Valid values | "Tor"
+## Examples     | "Tor"
+#proxy = ""
 ## The number of outbound connections to make and try keep.
 ##
 ## It's recommended to keep this value above 12.
@@ -130,17 +163,106 @@ listen_on_v6 = "::"
 ## Valid values | 0.0..1.0
 ## Examples     | 0.0, 0.5, 0.123, 0.999, 1.0
 #gray_peers_percent = 0.7
-## The port to use to accept incoming IPv4 P2P connections.
+## The port bind to this network zone.
 ##
-## Setting this to 0 will disable incoming P2P connections.
+## This port will be bind to if the incoming P2P
+## server for this zone has been enabled.
 ##
-## Type         | Number
-## Valid values | 0..65534
+## Type         | Number or "Default"
+## Valid values | 0..65534, "Default"
 ## Examples     | 18080, 9999, 5432
-p2p_port = 18080
+p2p_port = "Default"
 
 ## The address book config.
 [p2p.clear_net.address_book_config]
+## The size of the white peer list.
+##
+## The white list holds peers that have been connected to before.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 1000, 500, 241
+max_white_list_length = 1000
+## The size of the gray peer list.
+##
+## The gray peer list holds peers that have been
+## told about but not connected to cuprated.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 1000, 500, 241
+max_gray_list_length = 5000
+## The time period between address book saves.
+##
+## Type     | Duration
+## Examples | { secs = 90, nanos = 0 }, { secs = 100, nano = 123 }
+peer_save_period = { secs = 90, nanos = 0 }
+
+## The tor-net P2P config.
+[p2p.tor_net]
+## Enable the Tor P2P network.
+##
+## Type         | boolean
+## Valid values | false, true
+## Examples     | false
+#enabled = false
+## Enable Tor inbound onion server.
+##
+## In Arti mode, setting this to `true` will enable Arti's onion service for accepting inbound
+## Tor P2P connections. The keypair and therefore onion address is generated randomly on first run.
+##
+## In Daemon mode, setting this to `true` will enable a TCP server listening for inbound connections
+## from your Tor daemon. Refer to the `tor.anonymous_inbound` and `tor.listening_addr` field for onion address
+## and listening configuration.
+##
+## The server will listen on port `p2p.tor_net.p2p_port`
+##
+## Type         | boolean
+## Valid values | false, true
+## Examples     | false
+#inbound_onion = false
+## The number of outbound connections to make and try keep.
+##
+## It's recommended to keep this value above 12.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 12, 32, 64, 100, 500
+#outbound_connections = 12
+## The amount of extra connections to make if cuprated is under load.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 0, 12, 32, 64, 100, 500
+#extra_outbound_connections = 2
+## The maximum amount of inbound connections to allow.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 0, 12, 32, 64, 100, 500
+#max_inbound_connections = 128
+## The percent of connections that should be
+## to peers that haven't connected to before.
+##
+## 0.0 is 0%.
+## 1.0 is 100%.
+##
+## Type         | Floating point number
+## Valid values | 0.0..1.0
+## Examples     | 0.0, 0.5, 0.123, 0.999, 1.0
+#gray_peers_percent = 0.7
+## The port bind to this network zone.
+##
+## This port will be bind to if the incoming P2P
+## server for this zone has been enabled.
+##
+## Type         | Number or "Default"
+## Valid values | 0..65534, "Default"
+## Examples     | 18080, 9999, 5432
+p2p_port = "Default"
+
+## The address book config.
+[p2p.tor_net.address_book_config]
 ## The size of the white peer list.
 ##
 ## The white list holds peers that have been connected to before.
@@ -177,7 +299,7 @@ peer_save_period = { secs = 90, nanos = 0 }
 ## Type         | Number
 ## Valid values | >= 0
 ## Examples     | 1_000_000_000, 5_500_000_000, 500_000_000
-#buffer_bytes = 1000000000
+#buffer_bytes = "Default"
 ## The size of the in progress queue (in bytes)
 ## at which cuprated stops requesting more blocks.
 ##
@@ -190,7 +312,7 @@ peer_save_period = { secs = 90, nanos = 0 }
 ## Type         | Number
 ## Valid values | >= 0
 ## Examples     | 500_000_000, 1_000_000_000,
-#in_progress_queue_bytes = 500000000
+#in_progress_queue_bytes = "Default"
 ## The target size of a single batch of blocks (in bytes).
 ##
 ## This value must be below 100_000,000,
@@ -204,6 +326,83 @@ peer_save_period = { secs = 90, nanos = 0 }
 ## Type     | Duration
 ## Examples | { secs = 30, nanos = 0 }, { secs = 35, nano = 123 }
 check_client_pool_interval = { secs = 30, nanos = 0 }
+
+## Configuration for cuprated's Tor component
+[tor]
+## Specify how to connect to the Tor network.
+##
+## Only applies when `p2p.tor_net.enabled` is true or
+## `p2p.clear_net.proxy` is set to "Tor".
+##
+## When "Daemon" is set, the Tor daemon address to use can be
+## specified in `tor.daemon.address`.
+##
+## Type         | String
+## Valid values | "Auto", "Arti", "Daemon"
+## Examples     | "Arti"
+#mode = "Auto"
+
+## Arti config
+##
+## Only relevant if `tor.mode` is set to "Arti"
+[tor.arti]
+## Path to the arti state directory.
+##
+## The default directories for each OS:
+##
+## | OS      | Path                                                |
+## |---------|-----------------------------------------------------|
+## | Windows | "C:\Users\Alice\AppData\Roaming\Cuprate\"           |
+## | macOS   | "/Users/Alice/Library/Application Support/Cuprate/" |
+## | Linux   | "/home/alice/.local/share/cuprate/"                 |
+directory_path = "/home/cuprate/.local/share/cuprate/arti"
+## Enable isolated circuits for Arti.
+##
+## If set, Arti will use different tor circuits for each connections. This can
+## cause stability issues if the connection count is important.
+##
+## Type         | boolean
+## Valid values | false, true
+## Examples     | false
+isolated_circuit = false
+## Enable PoW security for Arti.
+##
+## If set, Arti will enforce an EquiX PoW to be resolved for
+## other nodes to complete a rendez-vous request when under
+## heavy load.
+##
+## Type         | boolean
+## Valid values | false, true
+## Examples     | false
+onion_service_pow = false
+
+## Tor Daemon config
+##
+## Only relevant if `tor.mode` is set to "Daemon"
+[tor.daemon]
+## The IP address and port of the external Tor daemon to use for outgoing connections.
+##
+## Type     | Socket address
+## Examples | "[::1]:9050", "127.0.0.1:9050"
+address = "127.0.0.1:9050"
+## Enable inbound connections for Daemon mode
+##
+## This string specify the onion address that should be advertized to the Tor network
+## and that your daemon should be expecting connections from.
+##
+## When this is set, `p2p.tor_net.p2p_port` is not used for host listening, but as the source
+## port of your hidden service in your torrc configuration file. For setting Cuprate's
+## listening port see `tor.listening_addr` field
+##
+## Type         | String
+## Valid values | "<56 character domain>.onion"
+## Examples     | "monerotoruzizulg5ttgat2emf4d6fbmiea25detrmmy7erypseyteyd.onion"
+#anonymous_inbound = ""
+## The IP address and port to bind and listen on for anonymous inbound connections from Tor Daemon.
+##
+## Type     | Socket address
+## Examples | "0.0.0.0:18083", "192.168.1.50:2000", "[::]:5000", "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:18082"
+listening_addr = "127.0.0.1:18083"
 
 ## Configuration for the unrestricted RPC server.
 [rpc.unrestricted]
@@ -219,11 +418,17 @@ check_client_pool_interval = { secs = 30, nanos = 0 }
 ## Type         | boolean
 ## Valid values | true, false
 i_know_what_im_doing_allow_public_unrestricted_rpc = false
-## The address and port the RPC server will listen on.
+## The address the RPC server will listen on.
 ##
-## Type     | IPv4/IPv6 address + port
-## Examples | "", "127.0.0.1:18081", "192.168.1.50:18085"
-address = "127.0.0.1:18081"
+## Type     | IPv4/IPv6 address
+## Examples | "", "127.0.0.1", "192.168.1.50"
+address = "127.0.0.1"
+## The port the RPC server will listen on.
+##
+## Type         | Number or "Default"
+## Valid values | 0..65534, "Default"
+## Examples     | 18081, 18089, 5432
+port = "Default"
 ## Toggle the RPC server.
 ##
 ## If `true` the RPC server will be enabled.
@@ -252,11 +457,17 @@ enable = true
 ## Type         | boolean
 ## Valid values | true, false
 advertise = false
-## The address and port the RPC server will listen on.
+## The address the RPC server will listen on.
 ##
-## Type     | IPv4/IPv6 address + port
-## Examples | "", "127.0.0.1:18081", "192.168.1.50:18085"
-address = "0.0.0.0:18089"
+## Type     | IPv4/IPv6 address
+## Examples | "", "127.0.0.1", "192.168.1.50"
+address = "0.0.0.0"
+## The port the RPC server will listen on.
+##
+## Type         | Number or "Default"
+## Valid values | 0..65534, "Default"
+## Examples     | 18081, 18089, 5432
+port = "Default"
 ## Toggle the RPC server.
 ##
 ## If `true` the RPC server will be enabled.
@@ -264,7 +475,7 @@ address = "0.0.0.0:18089"
 ##
 ## Type     | boolean
 ## Examples | true, false
-enable = true
+enable = false
 ## If a request is above this byte limit, it will be rejected.
 ##
 ## Setting this to `0` will disable the limit.
@@ -283,7 +494,15 @@ enable = true
 ## Type         | Number
 ## Valid values | >= 0
 ## Examples     | 1, 16, 10
-#reader_threads = 3
+#reader_threads = 32
+## The size of the fjall read cache.
+##
+## Fjall recommends using 20 to 25 % of available memory.
+##
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 64_000_000
+#fjall_cache_size = "Default"
 
 ## The tx-pool config.
 [storage.txpool]
@@ -293,32 +512,27 @@ enable = true
 ## Valid values | >= 0
 ## Examples     | 100_000_000, 50_000_000
 max_txpool_byte_size = 100000000
-## The sync mode of the database.
+## The maximum age of transactions in the pool in seconds.
+## Transactions will be dropped after this time is reached.
 ##
-## Using "Safe" makes the DB less likely to corrupt
-## if there is an unexpected crash, although it will
-## make DB writes much slower.
-##
-## Valid values | "Fast", "Safe"
-#sync_mode = "Fast"
+## Type         | Number
+## Valid values | >= 0
+## Examples     | 100_000_000, 50_000_000
+maximum_age_secs = 86400
 
 ## The blockchain config.
 [storage.blockchain]
-## The sync mode of the database.
+## The size of each tape cache.
 ##
-## Using "Safe" makes the DB less likely to corrupt
-## if there is an unexpected crash, although it will
-## make DB writes much slower.
-##
-## Valid values | "Fast", "Safe"
-#sync_mode = "Fast"
+## You probably do not need to edit these values.
+#tapes_cache_sizes = { rct_outputs = 104857600, tx_infos = 1048576, block_infos = 1048576, pruned_blobs = 26214400, v1_prunable_blobs = 8192, prunable_blobs = 8192 }
 
 ## Configuration for the file-system.
 [fs]
-## The data directory.
+## The fast data directory.
 ##
-## This directory store the blockchain, transaction pool,
-## log files, and any misc data files.
+## This directory stores any long-term data where it is beneficial for fast access. This will
+## be the same as the `slow_data_directory` unless changed.
 ##
 ## The default directories for each OS:
 ##
@@ -327,7 +541,20 @@ max_txpool_byte_size = 100000000
 ## | Windows | "C:\Users\Alice\AppData\Roaming\Cuprate\"           |
 ## | macOS   | "/Users/Alice/Library/Application Support/Cuprate/" |
 ## | Linux   | "/home/alice/.local/share/cuprate/"                 |
-#data_directory = "/home/cuprate/.local/share/cuprate"
+#fast_data_directory = "/home/cuprate/.local/share/cuprate"
+## The slow data directory.
+##
+## This directory stores any long-term data where it is not that beneficial for fast access. This will
+## be the same as the `fast_data_directory` unless changed.
+##
+## The default directories for each OS:
+##
+## | OS      | Path                                                |
+## |---------|-----------------------------------------------------|
+## | Windows | "C:\Users\Alice\AppData\Roaming\Cuprate\"           |
+## | macOS   | "/Users/Alice/Library/Application Support/Cuprate/" |
+## | Linux   | "/home/alice/.local/share/cuprate/"                 |
+#slow_data_directory = "/home/cuprate/.local/share/cuprate"
 ## The cache directory.
 ##
 ## This directory store cache files.
@@ -342,3 +569,4 @@ max_txpool_byte_size = 100000000
 ## | macOS   | "/Users/Alice/Library/Caches/Cuprate/"  |
 ## | Linux   | "/home/alice/.cache/cuprate/"           |
 #cache_directory = "/home/cuprate/.cache/cuprate"
+

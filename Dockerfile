@@ -1,19 +1,17 @@
 # Build stage
-FROM rust:1.95-slim-bookworm AS builder
+FROM rust:1.95.0-slim-trixie AS builder
 
 # Install build dependencies
 RUN apt-get update && \
-    apt-get install -y build-essential pkg-config libssl-dev git cmake && \
-    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev git cmake && \
     rm -rf /var/lib/apt/lists/*
 
 # Define ARG for Cuprate tag
-ARG CUPRATE_TAG=cuprated-0.0.8
+ARG CUPRATE_TAG=cuprated-0.0.9
 
-# Clone the Cuprate repository with no caching
+# Clone the Cuprate repository
 WORKDIR /usr/src
 
-# The echo forces this layer to be rebuilt even when using cached layers
 RUN git clone https://github.com/Cuprate/cuprate.git && \
     cd cuprate && \
     if [ "$CUPRATE_TAG" != "main" ]; then \
@@ -47,9 +45,7 @@ LABEL org.opencontainers.image.title="cuprate-docker" \
 
 # Install runtime dependencies and apply latest security patches
 RUN apt-get update && \
-    apt-get install -y libssl3 ca-certificates wget && \
-    apt-get upgrade -y && \
-    # Clean up
+    apt-get install -y --no-install-recommends libssl3 ca-certificates wget && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a cuprate user

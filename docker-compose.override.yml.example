@@ -13,7 +13,7 @@ services:
     #   context: .
     #   dockerfile: Dockerfile
     #   args:
-    #     CUPRATE_TAG: cuprated-0.0.8
+    #     CUPRATE_TAG: cuprated-0.0.9
 
     ## Uncomment for testnet
     # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--network", "testnet"]
