@@ -23,7 +23,7 @@
 - Multi-architecture images (`linux/amd64` and `linux/arm64`)
 - Automated builds — new upstream Cuprate releases are detected and built every 8 hours
 - Healthcheck via restricted RPC endpoint
-- Resource limits and log rotation pre-configured
+- Resource limits (4 GB memory limit in Docker Compose) and log rotation pre-configured
 - Mainnet, testnet, and stagenet support
 
 ## Quick Start
@@ -77,8 +77,7 @@ Key defaults:
 | `network` | `"Mainnet"` | Network to sync (`Mainnet`, `Testnet`, `Stagenet`) |
 | `fast_sync` | `true` | Skip verification of old blocks using known hashes |
 | `rpc.restricted.enable` | `true` | Restricted (read-only) RPC on `0.0.0.0:18089` |
-| `rpc.unrestricted.enable` | `true` | Unrestricted RPC on `127.0.0.1:18081` (localhost only) |
-| `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
+| `rpc.unrestricted.enable` | `true` | Unrestricted RPC on `127.0.0.1:18081` (container-local only by default) |
 | `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
 
 ### Network Selection
@@ -108,6 +107,25 @@ docker compose up -d
 
 Only mainnet ports are mapped by default. See `docker-compose.override.yml.example` for testnet/stagenet.
 
+## CLI Options
+
+`cuprated` supports several command-line flags that override config file values. These can be passed via the `command` array in `docker-compose.yml` or at the end of a `docker run` invocation:
+
+| Flag | Description |
+|------|-------------|
+| `--network <mainnet\|testnet\|stagenet>` | Override the network to run on |
+| `--config-file <PATH>` | Specify a custom config file path |
+| `--dry-run` | Validate configuration and exit without starting the node |
+| `--generate-config` | Print the full default config file to stdout |
+| `--version` | Print version and build information in JSON |
+| `--no-fast-sync` | Disable fast sync (full verification of all past blocks) |
+
+Example:
+
+```bash
+docker run --rm ghcr.io/hundehausen/cuprate-docker:latest --version
+```
+
 ## Building from Source
 
 ```bash
@@ -129,10 +147,6 @@ You can also use the compose override to build locally instead of pulling from G
 
 ## Troubleshooting
 
-### STDIN/TTY Issue
-
-cuprated requires a STDIN pipe to avoid log spam ([cuprate#396](https://github.com/Cuprate/cuprate/issues/396)). When using `docker run`, always include the `-t -i` flags. The docker-compose configuration handles this automatically with `tty: true` and `stdin_open: true`.
-
 ### Container Exits Immediately
 
 Check the container logs:
@@ -142,6 +156,15 @@ docker logs cuprate-node
 ```
 
 Common causes: invalid config file syntax, insufficient permissions on mounted volumes. Ensure `config/` and its files are readable.
+
+You can validate your config before starting the container:
+
+```bash
+docker run --rm \
+  -v ./config:/home/cuprate/.config/cuprate:ro \
+  ghcr.io/hundehausen/cuprate-docker:latest \
+  --config-file /home/cuprate/.config/cuprate/Cuprated.toml --dry-run
+```
 
 ### Slow Initial Sync
 
