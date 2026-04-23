@@ -64,33 +64,35 @@ jobs:
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-  build-and-push:
+  build-arch:
     needs: check-upstream-tag
     if: needs.check-upstream-tag.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            suffix: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            suffix: arm64
     permissions:
       contents: read
       packages: write
-      security-events: write # Required for GitHub CodeQL and dependency submission
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Fetch all history for better versioning
 
-      # Set up QEMU for multi-architecture builds
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
-        with:
-          platforms: 'arm64,amd64'
-
-      # Set up Docker Buildx for multi-platform builds
+      # Set up Docker Buildx
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
         with:
           version: latest
-          platforms: linux/amd64,linux/arm64
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
@@ -99,7 +101,65 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Create and start build cache
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/cuprate-docker
+          flavor: |
+            suffix=-${{ matrix.suffix }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ needs.check-upstream-tag.outputs.version }}
+            type=sha,format=short
+            type=ref,event=branch
+            type=ref,event=tag
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          push: true
+          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CUPRATE_TAG=${{ needs.check-upstream-tag.outputs.cuprate_tag }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ needs.check-upstream-tag.outputs.version }}
+          # Arch-isolated caching to prevent cross-arch cache collisions
+          cache-from: |
+            type=gha
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache-${{ matrix.suffix }}
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache-${{ matrix.suffix }},mode=max
+          # Provenance/SBOM must be disabled when manually merging per-arch images
+          # with imagetools create, otherwise attestation manifests are picked up
+          # as platform variants and corrupt the multi-arch manifest list.
+          provenance: false
+          sbom: false
+
+  merge-manifests:
+    needs: [check-upstream-tag, build-arch]
+    if: needs.check-upstream-tag.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
@@ -113,28 +173,22 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            CUPRATE_TAG=${{ needs.check-upstream-tag.outputs.cuprate_tag }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VCS_REF=${{ github.sha }}
-            VERSION=${{ needs.check-upstream-tag.outputs.version }}
-          # Enhanced caching strategy
-          cache-from: |
-            type=gha
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache
-          cache-to: |
-            type=gha,mode=max
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache,mode=max
-          # Enable parallel builds and security features
-          builder: ${{ steps.buildx.outputs.name }}
-          provenance: true
-          sbom: true
-          outputs: type=registry,push=true
+      - name: Create and push multi-arch manifest list
+        run: |
+          TAG_ARGS=""
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              TAG_ARGS="$TAG_ARGS -t $tag"
+            fi
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+          SOURCE_AMD64="ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ needs.check-upstream-tag.outputs.version }}-amd64"
+          SOURCE_ARM64="ghcr.io/${{ github.repository_owner }}/cuprate-docker:${{ needs.check-upstream-tag.outputs.version }}-arm64"
+
+          echo "Creating manifest list with tags: $TAG_ARGS"
+          echo "Source images: $SOURCE_AMD64 $SOURCE_ARM64"
+
+          docker buildx imagetools create \
+            $TAG_ARGS \
+            "$SOURCE_AMD64" \
+            "$SOURCE_ARM64"
