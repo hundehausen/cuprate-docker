@@ -24,7 +24,7 @@ WORKDIR /usr/src/cuprate
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/usr/src/cuprate/target \
-    cargo build --release --bin cuprated && \
+    cargo build --release --package cuprated && \
     cp target/release/cuprated /usr/local/bin/cuprated
 
 # Runtime stage
@@ -70,9 +70,6 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
 EXPOSE 18080/tcp 28080/tcp 38080/tcp
 # Expose restricted RPC ports (mainnet, testnet, stagenet)
 EXPOSE 18089/tcp 28089/tcp 38089/tcp
-
-# Set up a volume for persistent data
-VOLUME ["/home/cuprate/.local/share/cuprate", "/home/cuprate/.config/cuprate"]
 
 # Default command
 ENTRYPOINT ["cuprated"]
