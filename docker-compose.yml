@@ -15,13 +15,6 @@ services:
     volumes:
       - cuprate-data:/home/cuprate/.local/share/cuprate
       - ./config:/home/cuprate/.config/cuprate
-    command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml"]
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:18089/get_height"]
-      interval: 60s
-      timeout: 10s
-      start_period: 120s
-      retries: 3
     deploy:
       resources:
         limits:
