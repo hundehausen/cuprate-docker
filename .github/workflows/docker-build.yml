@@ -116,6 +116,10 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
 
+      - name: Get build date
+        id: build-date
+        run: echo "date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+        
       - name: Build and push Docker image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
@@ -126,7 +130,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             CUPRATE_TAG=${{ needs.check-upstream-tag.outputs.cuprate_tag }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            BUILD_DATE=${{ steps.build-date.outputs.date }}
             VCS_REF=${{ github.sha }}
             VERSION=${{ needs.check-upstream-tag.outputs.version }}
           # Arch-isolated caching to prevent cross-arch cache collisions
