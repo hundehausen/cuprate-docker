@@ -14,6 +14,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
@@ -30,6 +31,6 @@ jobs:
           push: false
           platforms: linux/amd64
           cache-from: |
-            type=gha
+            type=gha,scope=build-amd64
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache-amd64
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,scope=build-amd64
