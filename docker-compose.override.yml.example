@@ -13,7 +13,8 @@ services:
     #   context: .
     #   dockerfile: Dockerfile
     #   args:
-    #     CUPRATE_TAG: cuprated-0.0.9
+    #     CUPRATE_TAG: cuprated-0.1.0-preview
+    #     FEATURES: jemalloc
 
     ## Uncomment for testnet
     # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--network", "testnet"]
@@ -26,3 +27,9 @@ services:
     # ports:
     #   - "38080:38080"
     #   - "38089:38089"
+
+    ## Uncomment for offline mode (no P2P)
+    # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--offline"]
+
+    ## Uncomment for regtest / FakeChain
+    # command: ["--config-file", "/home/cuprate/.config/cuprate/Cuprated.toml", "--regtest", "--seed-node", "172.18.0.2:18080"]

@@ -15,8 +15,16 @@
 
 ## The network cuprated should run on.
 ##
-## Valid values | "Mainnet", "Testnet", "Stagenet"
+## Valid values | "Mainnet", "Testnet", "Stagenet", "FakeChain"
 network = "Mainnet"
+## Run the node offline.
+##
+## No connections will be made to or accepted from peers,
+## on any network zone.
+##
+## Type         | boolean
+## Valid values | true, false
+offline = false
 ## Enable/disable fast sync.
 ##
 ## Fast sync skips verification of old blocks by
@@ -27,6 +35,14 @@ network = "Mainnet"
 ## Type         | boolean
 ## Valid values | true, false
 fast_sync = true
+## Fixes the PoW difficulty to this value.
+##
+## Only intended for regtest (`network = "FakeChain"`). A value of
+## `0` disables this override.
+##
+## Type         | Number
+## Valid values | >= 0
+#fixed_difficulty = 0
 ## The target maximum amount of memory to use in bytes.
 ##
 ## This is not a hard limit, but Cuprate will attempt to stay under this value.
@@ -122,17 +138,25 @@ enable_inbound_v6 = false
 listen_on_v6 = "::"
 ## The proxy to use for outgoing P2P connections
 ##
-## This setting can only take "Tor" at the moment.
-## This will anonymise clearnet connections through Tor.
+## Setting this to "Tor" will anonymise clearnet connections through Tor.
 ##
 ## Setting this to "" (an empty string) will disable the proxy.
 ##
 ## Enabling this setting will disable inbound connections.
 ##
 ## Type         | String
-## Valid values | "Tor"
-## Examples     | "Tor"
+## Valid values | "Tor", "socks5://ip:port", "socks5://user:pass@ip:port"
+## Examples     | "Tor", "socks5://127.0.0.1:9050"
 #proxy = ""
+## Extra seed nodes to connect to on startup, in addition to the
+## network's built-in seeds. Given as "ip:port" socket addresses.
+##
+## FakeChain/regtest ships no built-in seeds, so a private or isolated
+## network relies entirely on this list to bootstrap.
+##
+## Type     | Array of socket addresses
+## Examples | "1.2.3.4:18080", "5.6.7.8:18080"
+#seed_nodes = []
 ## The number of outbound connections to make and try keep.
 ##
 ## It's recommended to keep this value above 12.
@@ -162,7 +186,7 @@ listen_on_v6 = "::"
 ## Type         | Floating point number
 ## Valid values | 0.0..1.0
 ## Examples     | 0.0, 0.5, 0.123, 0.999, 1.0
-#gray_peers_percent = 0.7
+#gray_peers_percent = 0.3
 ## The port bind to this network zone.
 ##
 ## This port will be bind to if the incoming P2P
@@ -250,7 +274,7 @@ peer_save_period = { secs = 90, nanos = 0 }
 ## Type         | Floating point number
 ## Valid values | 0.0..1.0
 ## Examples     | 0.0, 0.5, 0.123, 0.999, 1.0
-#gray_peers_percent = 0.7
+#gray_peers_percent = 0.3
 ## The port bind to this network zone.
 ##
 ## This port will be bind to if the incoming P2P
@@ -473,6 +497,9 @@ port = "Default"
 ## If `true` the RPC server will be enabled.
 ## If `false` the RPC server will be disabled.
 ##
+## Upstream default is `false`. Enabled here so the Docker healthcheck
+## and external clients can use restricted RPC.
+##
 ## Type     | boolean
 ## Examples | true, false
 enable = true
@@ -569,4 +596,3 @@ maximum_age_secs = 86400
 ## | macOS   | "/Users/Alice/Library/Caches/Cuprate/"  |
 ## | Linux   | "/home/alice/.cache/cuprate/"           |
 #cache_directory = "/home/cuprate/.cache/cuprate"
-

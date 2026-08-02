@@ -18,13 +18,16 @@
 
 > **Note:** Cuprate is under active development and not yet ready for production use. This project is not affiliated with Monero or Cuprate.
 
+Compatible with **cuprated 0.1.0-preview (Kesterite)** — initial wallet RPC support, offline mode, graceful shutdown, regtest/FakeChain, and SOCKS5 proxies.
+
 ## Features
 
 - Multi-architecture images (`linux/amd64` and `linux/arm64`)
 - Automated builds — new upstream Cuprate releases are detected and built every 8 hours
+- Built with `jemalloc` (same default as upstream Docker)
 - Healthcheck via restricted RPC endpoint
 - Resource limits (4 GB memory limit in Docker Compose) and log rotation pre-configured
-- Mainnet, testnet, and stagenet support
+- Mainnet, testnet, stagenet, and FakeChain/regtest support
 
 ## Quick Start
 
@@ -74,15 +77,16 @@ Key defaults:
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `network` | `"Mainnet"` | Network to sync (`Mainnet`, `Testnet`, `Stagenet`) |
+| `network` | `"Mainnet"` | Network to sync (`Mainnet`, `Testnet`, `Stagenet`, `FakeChain`) |
+| `offline` | `false` | When `true`, no P2P connections are made or accepted |
 | `fast_sync` | `true` | Skip verification of old blocks using known hashes |
-| `rpc.restricted.enable` | `true` | Restricted (read-only) RPC on `0.0.0.0:18089` |
+| `rpc.restricted.enable` | `true` | Restricted RPC on `0.0.0.0:18089` (enabled for Docker healthcheck; upstream default is `false`) |
 | `rpc.unrestricted.enable` | `true` | Unrestricted RPC on `127.0.0.1:18081` (container-local only by default) |
 | `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
 
 ### Network Selection
 
-By default the node runs on mainnet. For testnet or stagenet, copy the override example and uncomment the section you need:
+By default the node runs on mainnet. For testnet, stagenet, offline mode, or regtest, copy the override example and uncomment the section you need:
 
 ```bash
 cp docker-compose.override.yml.example docker-compose.override.yml
@@ -113,10 +117,16 @@ Only mainnet ports are mapped by default. See `docker-compose.override.yml.examp
 
 | Flag | Description |
 |------|-------------|
-| `--network <mainnet\|testnet\|stagenet>` | Override the network to run on |
+| `--network <mainnet\|testnet\|stagenet\|fakechain>` | Override the network to run on |
+| `--regtest` | Regtest mode (equivalent to `--network=fakechain`) |
+| `--offline` | Do not connect to or listen for peers |
+| `--outbound-connections <N>` | Outbound clear-net connections to maintain |
+| `--seed-node <IP:PORT>` | Extra seed node (repeatable; useful for regtest) |
+| `--fixed-difficulty <N>` | Force difficulty cache value (regtest only) |
 | `--config-file <PATH>` | Specify a custom config file path |
 | `--dry-run` | Validate configuration and exit without starting the node |
 | `--generate-config` | Print the full default config file to stdout |
+| `--skip-config-warning` | Skip the missing-config warning delay |
 | `--version` | Print version and build information in JSON |
 | `--no-fast-sync` | Disable fast sync (full verification of all past blocks) |
 
@@ -129,17 +139,22 @@ docker run --rm ghcr.io/hundehausen/cuprate-docker:latest --version
 ## Building from Source
 
 ```bash
-# Build with default tag
+# Build with default tag (cuprated-0.1.0-preview)
 docker build -t cuprate-docker:local .
 
 # Build a specific Cuprate version
 docker build -t cuprate-docker:local \
-  --build-arg CUPRATE_TAG=cuprated-0.0.9 \
+  --build-arg CUPRATE_TAG=cuprated-0.1.0-preview \
   .
 
 # Build latest development version
 docker build -t cuprate-docker:local \
   --build-arg CUPRATE_TAG=main \
+  .
+
+# Optional allocator feature (default: jemalloc)
+docker build -t cuprate-docker:local \
+  --build-arg FEATURES=jemalloc \
   .
 ```
 
@@ -178,6 +193,6 @@ docker compose logs -f
 
 The healthcheck queries the restricted RPC at `http://localhost:18089/get_height`. If it fails:
 
-1. Ensure `rpc.restricted.enable = true` in `config/Cuprated.toml`
+1. Ensure `rpc.restricted.enable = true` in `config/Cuprated.toml` (this image enables it by default)
 2. The node has a 120-second start period before healthchecks begin
 3. Check if the node is still syncing — RPC may not respond until initial startup completes

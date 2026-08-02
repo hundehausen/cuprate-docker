@@ -1,13 +1,15 @@
 # Build stage
-FROM rust:1.97.0-slim-trixie AS builder
+FROM rust:1.97-slim-trixie AS builder
 
 # Install build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev git cmake && \
     rm -rf /var/lib/apt/lists/*
 
-# Define ARG for Cuprate tag
-ARG CUPRATE_TAG=cuprated-0.0.9
+# Cuprate release tag / branch to build
+ARG CUPRATE_TAG=cuprated-0.1.0-preview
+# Allocator feature (matches upstream Docker default)
+ARG FEATURES=jemalloc
 
 # Clone the Cuprate repository
 WORKDIR /usr/src
@@ -24,7 +26,7 @@ WORKDIR /usr/src/cuprate
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/usr/src/cuprate/target \
-    cargo build --release --package cuprated && \
+    cargo build --release --locked --bin cuprated --features "$FEATURES" && \
     cp target/release/cuprated /usr/local/bin/cuprated
 
 # Runtime stage
@@ -45,14 +47,16 @@ LABEL org.opencontainers.image.title="cuprate-docker" \
 
 # Install runtime dependencies and apply latest security patches
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libssl3 ca-certificates wget && \
+    apt-get install -y --no-install-recommends ca-certificates wget && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a cuprate user
-RUN useradd -m -u 1000 -s /bin/bash cuprate
+RUN useradd -m -u 1000 -s /usr/sbin/nologin cuprate
 
-# Create directories for Cuprate data
-RUN mkdir -p /home/cuprate/.local/share/cuprate /home/cuprate/.config/cuprate \
+# Create directories for Cuprate data, config, and cache
+RUN mkdir -p /home/cuprate/.local/share/cuprate \
+             /home/cuprate/.config/cuprate \
+             /home/cuprate/.cache/cuprate \
     && chown -R cuprate:cuprate /home/cuprate
 
 # Copy the binary from the builder stage
@@ -61,6 +65,7 @@ COPY --from=builder /usr/local/bin/cuprated /usr/local/bin/
 # Set the user
 USER cuprate
 WORKDIR /home/cuprate
+ENV HOME=/home/cuprate
 
 # Healthcheck via restricted RPC
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
