@@ -24,6 +24,8 @@ Compatible with **cuprated 0.1.0-preview (Kesterite)** — initial wallet RPC su
 
 - Multi-architecture images (`linux/amd64` and `linux/arm64`)
 - Automated builds — new upstream Cuprate releases are detected and built every 8 hours
+- Builds pinned to the exact upstream commit — a moved or force-pushed tag fails the build instead of changing what ships
+- CI smoke-tests every image (binary commit + healthcheck) before it is tagged `latest`
 - Built with `jemalloc` (same default as upstream Docker)
 - Healthcheck via restricted RPC endpoint
 - Resource limits (4 GB memory limit in Docker Compose) and log rotation pre-configured
@@ -101,6 +103,8 @@ docker compose up -d
 | `cuprate-data` (Docker volume) | `/home/cuprate/.local/share/cuprate` | Blockchain database |
 | `./config` (bind mount) | `/home/cuprate/.config/cuprate` | Configuration files |
 
+The image also ships a copy of the default config at `/home/cuprate/.config/cuprate/Cuprated.toml`, so it works standalone without any mount. A bind-mounted `./config` (as in `docker-compose.yml`) shadows that copy.
+
 ## Ports
 
 | Network | P2P | Restricted RPC |
@@ -110,6 +114,19 @@ docker compose up -d
 | Stagenet | 38080 | 38089 |
 
 Only mainnet ports are mapped by default. See `docker-compose.override.yml.example` for testnet/stagenet.
+
+## Security: Docker port publishing (0.0.0.0) and UFW
+
+Docker publishes ports on all interfaces by default. If you define `ports:` in `docker-compose.yml` (for example `- 18089:18089`), Docker binds those ports to `0.0.0.0` unless you explicitly specify a host IP, making them reachable from any network interface on the host.
+
+This can also bypass UFW rules. Docker installs its own iptables rules that accept traffic to published ports before UFW's filter rules are evaluated, so even a default-deny firewall does not stop a published port from being reachable from the internet.
+
+- The restricted RPC (`18089`) is enabled by default in this image (`rpc.restricted.enable = true`). If you do not want it exposed publicly, either do not publish it at all or bind it only to localhost:
+  - `docker-compose.yml`: `ports: ["127.0.0.1:18089:18089"]`
+- For a public P2P node, it is normal to publish `18080`. Be deliberate about whether `18089` (restricted RPC) should be public.
+- If you are running this container behind a firewall (e.g. at home behind a NAT router), it is usually okay to bind on `0.0.0.0`.
+
+The unrestricted RPC (`18081`) is only bound to `127.0.0.1` inside the container and is never published by default.
 
 ## CLI Options
 
@@ -142,12 +159,19 @@ docker run --rm ghcr.io/hundehausen/cuprate-docker:latest --version
 # Build with default tag (cuprated-0.1.0-preview)
 docker build -t cuprate-docker:local .
 
-# Build a specific Cuprate version
+# Build a specific Cuprate version (pinned to its commit hash)
 docker build -t cuprate-docker:local \
   --build-arg CUPRATE_TAG=cuprated-0.1.0-preview \
   .
 
-# Build latest development version
+# Build a specific Cuprate version with an explicit commit hash
+# (PINNED_COMMIT must be the commit CUPRATE_TAG resolves to)
+docker build -t cuprate-docker:local \
+  --build-arg CUPRATE_TAG=cuprated-0.1.0-preview \
+  --build-arg CUPRATE_COMMIT_HASH=318c2dea4eb404ac4ecf2bea87c1a4696b0198cc \
+  .
+
+# Build latest development version (moving branch, pin check skipped)
 docker build -t cuprate-docker:local \
   --build-arg CUPRATE_TAG=main \
   .
@@ -157,6 +181,8 @@ docker build -t cuprate-docker:local \
   --build-arg FEATURES=jemalloc \
   .
 ```
+
+The build verifies that `CUPRATE_TAG` resolves to `CUPRATE_COMMIT_HASH` and fails if they disagree — a moved or force-pushed upstream tag can never silently change what gets built. The exception is `CUPRATE_TAG=main`, which points at a moving branch and is not pinned. The default tag and hash are kept in lockstep in the `Dockerfile`.
 
 You can also use the compose override to build locally instead of pulling from GHCR — see `docker-compose.override.yml.example`.
 

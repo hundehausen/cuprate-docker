@@ -7,7 +7,13 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Cuprate release tag / branch to build
+# renovate: datasource=github-releases depName=Cuprate/cuprate
 ARG CUPRATE_TAG=cuprated-0.1.0-preview
+# The exact commit CUPRATE_TAG must resolve to. Pinning this hash means a moved or
+# force-pushed upstream tag fails the build instead of silently producing a
+# different binary. Always bump this in lockstep with CUPRATE_TAG.
+# Only skipped when CUPRATE_TAG=main (a moving branch that cannot be pinned).
+ARG CUPRATE_COMMIT_HASH=318c2dea4eb404ac4ecf2bea87c1a4696b0198cc
 # Allocator feature (matches upstream Docker default)
 ARG FEATURES=jemalloc
 
@@ -18,7 +24,9 @@ RUN git clone https://github.com/Cuprate/cuprate.git && \
     cd cuprate && \
     if [ "$CUPRATE_TAG" != "main" ]; then \
         git fetch --all --tags && \
-        git checkout ${CUPRATE_TAG}; \
+        git checkout ${CUPRATE_TAG} && \
+        test "$(git rev-parse HEAD)" = "${CUPRATE_COMMIT_HASH}" || \
+            { echo "error: ${CUPRATE_TAG} resolves to $(git rev-parse HEAD), expected ${CUPRATE_COMMIT_HASH}" >&2; exit 1; }; \
     fi
 WORKDIR /usr/src/cuprate
 
@@ -61,6 +69,10 @@ RUN mkdir -p /home/cuprate/.local/share/cuprate \
 
 # Copy the binary from the builder stage
 COPY --from=builder /usr/local/bin/cuprated /usr/local/bin/
+
+# Ship a default config so the image works standalone (e.g. CI smoke tests).
+# A bind-mounted ./config (as in docker-compose.yml) shadows this path and wins.
+COPY --chown=cuprate:cuprate config/Cuprated.toml /home/cuprate/.config/cuprate/Cuprated.toml
 
 # Set the user
 USER cuprate
