@@ -14,11 +14,38 @@ services:
       # - "38089:38089" # stagenet
     volumes:
       - cuprate-data:/home/cuprate/.local/share/cuprate
-      - ./config:/home/cuprate/.config/cuprate
+      # Mount the config read-only: the container user (uid 1000) matches a
+      # common host uid, and a writable bind mount would let a compromised
+      # node write straight to the host directory. Read-only still lets the
+      # node read its config (it never writes it back).
+      - ./config:/home/cuprate/.config/cuprate:ro
+    # The node only needs to write to its data volume and cache.
+    # A read-only root filesystem (plus tmpfs below) means a compromise cannot
+    # plant files on the host-backed layer, only in ephemeral tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+      # Owned by the cuprate user (uid/gid 1000) so the node can write its cache;
+      # bounded so it can only ever hold 64MB of the memory budget.
+      - /home/cuprate/.cache/cuprate:size=64m,uid=1000,gid=1000,mode=700
+    # cuprated needs no Linux capabilities (it binds ports > 1024) and
+    # never elevates privileges; drop them all.
+    cap_drop:
+      - ALL
+    # With no-new-privileges, the setuid-root helpers removed from the image
+    # cannot be re-enabled even if an attacker finds a setuid binary elsewhere.
+    security_opt:
+      - no-new-privileges:true
+    # Cap total memory+swap at the same value so a memory-pressure attack cannot
+    # spill the node's working set into host swap. Docker would otherwise allow
+    # 2x the memory limit in swap (8G on a 4G-limit node).
+    memswap_limit: 4G
     deploy:
       resources:
         limits:
           memory: 4G
+          # Bound the process count as a cheap backstop against fork/connection storms.
+          pids: 512
     logging:
       driver: json-file
       options:
