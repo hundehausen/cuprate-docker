@@ -36,16 +36,19 @@ services:
     # cannot be re-enabled even if an attacker finds a setuid binary elsewhere.
     security_opt:
       - no-new-privileges:true
-    # Cap total memory+swap at the same value so a memory-pressure attack cannot
-    # spill the node's working set into host swap. Docker would otherwise allow
-    # 2x the memory limit in swap (8G on a 4G-limit node).
-    memswap_limit: 4G
+    # Cap total memory+swap with one knob so they always stay equal: a
+    # memory-pressure attack cannot spill the node's working set into host swap
+    # (Docker would otherwise allow 2x the memory limit in swap), at any value.
+    # On hosts with more RAM, raise CUPRATE_MEM_LIMIT — the node's fjall/jemalloc
+    # budget and the page-cache window for chain data scale with it. The shipped
+    # config's `target_max_memory` should stay at or under this value.
+    memswap_limit: ${CUPRATE_MEM_LIMIT:-4G}
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: ${CUPRATE_MEM_LIMIT:-4G}
           # Bound the process count as a cheap backstop against fork/connection storms.
-          pids: 512
+          pids: ${CUPRATE_PIDS_LIMIT:-512}
     logging:
       driver: json-file
       options:
