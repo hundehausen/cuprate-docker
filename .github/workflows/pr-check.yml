@@ -5,6 +5,7 @@ on:
     paths:
       - 'Dockerfile'
       - 'docker-compose.yml'
+      - 'config/Cuprated.toml'
       - '.github/workflows/**'
 
 concurrency:
@@ -20,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -29,8 +32,42 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: cuprate-docker:testing
           platforms: linux/amd64
           cache-from: |
             type=gha,scope=build-amd64
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/cuprate-docker:buildcache-amd64
           cache-to: type=gha,mode=max,scope=build-amd64
+
+      - name: Verify built binary reports the pinned Cuprate commit
+        run: |
+          set -euo pipefail
+          EXPECTED_COMMIT="$(awk -F= '/^ARG CUPRATE_COMMIT_HASH=/{print $2; exit}' Dockerfile)"
+          echo "Expecting commit: ${EXPECTED_COMMIT}"
+          OUT="$(docker run --rm cuprate-docker:testing --version || true)"
+          echo "${OUT}"
+          echo "${OUT}" | jq -e --arg want "${EXPECTED_COMMIT}" '.commit == $want' >/dev/null \
+            || { echo "::error::built image commit does not match pinned CUPRATE_COMMIT_HASH"; exit 1; }
+
+      - name: Verify the built image reaches a healthy state
+        run: |
+          set -uo pipefail
+          CID="$(docker run -d cuprate-docker:testing)"
+          status="starting"
+          for i in $(seq 1 80); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' "$CID" 2>/dev/null || echo gone)"
+            echo "attempt ${i}: health=${status}"
+            case "${status}" in
+              healthy) break ;;
+              unhealthy|gone)
+                echo "::error::container became ${status}"; docker logs "$CID" || true
+                docker rm -f "$CID" >/dev/null 2>&1 || true; exit 1 ;;
+            esac
+            sleep 5
+          done
+          if [ "${status}" != "healthy" ]; then
+            echo "::error::healthcheck did not pass within timeout"; docker logs "$CID" || true
+            docker rm -f "$CID" >/dev/null 2>&1 || true; exit 1
+          fi
+          docker rm -f "$CID" >/dev/null 2>&1 || true
