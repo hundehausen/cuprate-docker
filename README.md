@@ -29,6 +29,7 @@ Compatible with **cuprated 0.1.0-preview (Kesterite)** — initial wallet RPC su
 - Built with `jemalloc` (same default as upstream Docker)
 - Healthcheck via restricted RPC endpoint
 - Resource limits (4 GB memory limit in Docker Compose) and log rotation pre-configured
+- Hardened Docker Compose runtime by default: read-only root filesystem, all Linux capabilities dropped, `no-new-privileges`, read-only config mount, bounded process/swap limits (see [Security hardening](#security-hardening))
 - Mainnet, testnet, stagenet, and FakeChain/regtest support
 
 ## Quick Start
@@ -51,12 +52,14 @@ docker run -d \
   --name cuprate-node \
   -t -i \
   -v cuprate-data:/home/cuprate/.local/share/cuprate \
-  -v ./config:/home/cuprate/.config/cuprate \
+  -v ./config:/home/cuprate/.config/cuprate:ro \
   -p 18080:18080 \
   -p 18089:18089 \
   ghcr.io/hundehausen/cuprate-docker:latest \
   --config-file /home/cuprate/.config/cuprate/Cuprated.toml
 ```
+
+The Compose file applies additional hardening flags (`--read-only`, `--cap-drop=ALL`, `--security-opt no-new-privileges`, `--pids-limit`, `--memory-swap`); add the equivalent `docker run` flags if you run without Compose.
 
 ### Verify it's running
 
@@ -86,6 +89,10 @@ Key defaults:
 | `rpc.unrestricted.enable` | `true` | Unrestricted RPC on `127.0.0.1:18081` (container-local only by default) |
 | `target_max_memory` | auto-detected | Target max memory usage in bytes (auto-detected from system RAM) |
 
+### Logging
+
+`cuprated` writes a second, file-based log stream to `<data dir>/logs/` — i.e. inside the `cuprate-data` volume, which lives on the Docker host's disk. The shipped config keeps the **file** log level at `info` (not `debug`) and rotates **daily** with `max_log_files = 7`, so at most seven daily files exist. Each individual file is unbounded in size, and a fresh mainnet sync writes several GB of logs on its own, so keep an eye on the volume if you run a busy node. HTTP requests are only logged at `debug` level, so traffic against the public restricted RPC does not amplify disk writes.
+
 ### Network Selection
 
 By default the node runs on mainnet. For testnet, stagenet, offline mode, or regtest, copy the override example and uncomment the section you need:
@@ -100,8 +107,8 @@ docker compose up -d
 
 | Volume/Mount | Container Path | Description |
 |---|---|---|
-| `cuprate-data` (Docker volume) | `/home/cuprate/.local/share/cuprate` | Blockchain database |
-| `./config` (bind mount) | `/home/cuprate/.config/cuprate` | Configuration files |
+| `cuprate-data` (Docker volume) | `/home/cuprate/.local/share/cuprate` | Blockchain database and logs |
+| `./config` (bind mount, **read-only**) | `/home/cuprate/.config/cuprate` | Configuration files |
 
 The image also ships a copy of the default config at `/home/cuprate/.config/cuprate/Cuprated.toml`, so it works standalone without any mount. A bind-mounted `./config` (as in `docker-compose.yml`) shadows that copy.
 
@@ -127,6 +134,23 @@ This can also bypass UFW rules. Docker installs its own iptables rules that acce
 - If you are running this container behind a firewall (e.g. at home behind a NAT router), it is usually okay to bind on `0.0.0.0`.
 
 The unrestricted RPC (`18081`) is only bound to `127.0.0.1` inside the container and is never published by default.
+
+## Security: hardened container runtime
+
+The container runs as a non-root user (`cuprate`, uid 1000 — the same uid as many host users, so treat anything mounted writable as host-writable). To contain a compromised node, the default `docker-compose.yml` enforces:
+
+| Limit | Effect |
+|-------|--------|
+| `read_only: true` + tmpfs for `/tmp` and the cache dir | root filesystem cannot be modified; writes go only to the data volume or to ephemeral tmpfs. The cache (peer address book, etc.) is deliberately in RAM — Cuprate documents it as safely deletable — and is re-built on restart |
+| `./config` mounted `:ro` | the container user cannot write through the bind mount into the host's `config/` directory |
+| `cap_drop: [ALL]` | cuprated needs no Linux capabilities (it binds ports above 1024); drops all of them |
+| `security_opt: no-new-privileges` | setuid/setgid helpers cannot elevate privileges, even ones present in the base image |
+| `pids_limit: 512` | bounds processes/threads as a backstop against fork/connection storms |
+| `memswap_limit: 4G` (equal to the memory limit) | a memory-pressure attack cannot spill the node's working set into host swap (Docker would otherwise allow 2x the memory limit) |
+
+The image itself is hardened too: the runtime stage strips the setuid/setgid bits from Debian's helper binaries (`mount`, `su`, `passwd`, ...) and runs with the distroless-like principle of only `cuprated` + `wget` (healthcheck) + CA certificates.
+
+These limits apply to the Compose deployment. A bare `docker run` (as in [Quick Start](#quick-start)) only gets what you pass on the command line, so prefer `docker compose up -d` for anything facing a network.
 
 ## CLI Options
 
