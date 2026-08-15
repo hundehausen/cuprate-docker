@@ -58,6 +58,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates wget && \
     rm -rf /var/lib/apt/lists/*
 
+# Defense-in-depth: Debian's base image ships setuid-root helpers (mount(8),
+# su(1), passwd(1), ...). The node runs as a non-privileged user with all
+# capabilities dropped and no-new-privileges enforced at deploy time (see
+# docker-compose.yml), but remove the bits anyway so no helper in the image can
+# ever be used to gain root after a compromise. chmod, not delete, so packages
+# keep their files intact.
+RUN find / -xdev -type f -perm /4000 -exec chmod u-s {} + && \
+    find / -xdev -type f -perm /2000 -exec chmod g-s {} +
+
 # Create a cuprate user
 RUN useradd -m -u 1000 -s /usr/sbin/nologin cuprate
 
